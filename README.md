@@ -202,15 +202,6 @@ Results saved to `experiments/results/` as JSON. Regenerate charts with `python 
 
 ---
 
-## Roadmap
-
-- [x] Week 1: Episodic store, hybrid retrieval, forgetting policies, 11 unit tests
-- [x] Week 2: Compression strategies, token budget, async benchmark runner, real results
-- [ ] Week 3: Full 12-combination matrix, drift metric integration, additional datasets
-- [ ] Week 4: Docker, extended ADRs, notebook analysis, cost projection curves
-
----
-
 ## Why This Matters
 
 Production LLM systems at scale face this problem every day. A customer support agent handling 500 conversations/day, a coding assistant with multi-hour sessions, a research tool spanning weeks of interaction — all need principled memory management. The gap between naive truncation and a well-designed memory system is measurable: in this benchmark, the difference is 33.3% vs 66.7% accuracy on the same conversations, with one approach hallucinating at 16.7% and another at 0%.
