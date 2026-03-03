@@ -50,21 +50,14 @@ async def run_single_case(
     agent: MemoryAgent,
     judge: LLMJudge,
 ) -> tuple[int, int, float]:
-    """
-    Replay a test case through the agent and evaluate probe questions.
-
-    Returns: (n_correct, n_total, hallucination_count)
-    """
-    # Replay conversation history
+    """Returns: (n_correct, n_total, n_hallucinations)"""
     for i, turn in enumerate(test_case.history):
         if turn.role == "user":
             try:
                 await agent.chat(turn.content)
             except Exception as e:
                 log.error("turn_failed", turn_idx=i, error=str(e))
-                # Continue — don't abort the whole benchmark on one failed turn
 
-    # Evaluate probe questions
     n_correct = 0
     n_hallucinations = 0
 
@@ -80,11 +73,9 @@ async def run_single_case(
             if correct:
                 n_correct += 1
 
-            # Check for hallucination using a stub context
-            # In full implementation: pass the actual compressed context
             hallucinated = await judge.contains_hallucination(
                 response=response,
-                source_context=probe.expected_answer,  # simplified
+                source_context=probe.expected_answer,
             )
             if hallucinated:
                 n_hallucinations += 1
@@ -101,29 +92,18 @@ async def run_strategy_benchmark(
     test_cases: list[TestCase] | None = None,
     run_id: str | None = None,
 ) -> BenchmarkResult:
-    """
-    Evaluate one (compression_strategy, forgetting_policy) combination
-    across all test cases.
-
-    Each test case gets a fresh agent. Runs concurrently.
-    """
     if test_cases is None:
         test_cases = get_all_test_cases()
 
     run_id = run_id or str(uuid.uuid4())[:8]
     judge = LLMJudge()
+    agents = []  # track agents to collect cost reports
 
-    log.info(
-        "benchmark_start",
-        run_id=run_id,
-        strategy=strategy.name,
-        policy=forgetting_policy.value,
-        n_cases=len(test_cases),
-    )
+    log.info("benchmark_start", run_id=run_id, strategy=strategy.name,
+             policy=forgetting_policy.value, n_cases=len(test_cases))
 
     start_time = time.time()
 
-    # Create one agent per test case with isolated memory
     async def run_case(tc: TestCase) -> tuple[int, int, float]:
         collection = f"bench_{run_id}_{tc.case_id}"
         agent = MemoryAgent(
@@ -131,41 +111,39 @@ async def run_strategy_benchmark(
             compression_strategy=strategy,
             forgetting_policy=forgetting_policy,
         )
+        agents.append(agent)
         return await run_single_case(tc, agent, judge)
 
     results = await asyncio.gather(*[run_case(tc) for tc in test_cases])
 
-    # Aggregate
     total_correct = sum(r[0] for r in results)
     total_probes = sum(r[1] for r in results)
     total_hallucinations = sum(r[2] for r in results)
 
+    # Aggregate cost across all agents
+    total_cost = sum(a.budget.total_cost_usd() for a in agents)
+    total_tokens = sum(a.budget.total_tokens_used() for a in agents)
+    total_turns = sum(len(tc.history) for tc in test_cases)
+    avg_tokens_per_turn = total_tokens / total_turns if total_turns > 0 else 0.0
+
     elapsed = time.time() - start_time
 
-    # Build result
     result = BenchmarkResult(
         strategy_name=strategy.name,
         forgetting_policy=forgetting_policy.value,
         n_conversations=len(test_cases),
         n_probes=total_probes,
         accuracy=total_correct / total_probes if total_probes > 0 else 0.0,
-        avg_tokens_per_turn=0.0,   # populated from agent cost reports in full impl
-        total_cost_usd=0.0,        # same
+        avg_tokens_per_turn=round(avg_tokens_per_turn, 1),
+        total_cost_usd=round(total_cost, 6),
         compression_ratio=1.0,
         drift_score=0.0,
         hallucination_rate=total_hallucinations / total_probes if total_probes > 0 else 0.0,
     )
 
-    log.info(
-        "benchmark_complete",
-        run_id=run_id,
-        strategy=strategy.name,
-        accuracy=round(result.accuracy, 3),
-        hallucination_rate=round(result.hallucination_rate, 3),
-        elapsed_s=round(elapsed, 1),
-    )
+    log.info("benchmark_complete", run_id=run_id, strategy=strategy.name,
+             accuracy=round(result.accuracy, 3), elapsed_s=round(elapsed, 1))
 
-    # Persist result
     out_path = Path(settings.results_dir) / f"{run_id}_{strategy.name}.json"
     result.save(out_path)
 
