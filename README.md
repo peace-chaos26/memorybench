@@ -65,25 +65,40 @@ Naive approaches fail in measurable ways:
 
 ### Results Table
 
-| Strategy | Policy | Accuracy | Hallucination Rate | Cost (USD) | Cost / Correct Answer |
-|----------|--------|----------|--------------------|------------|-----------------------|
+| Strategy | Policy | Accuracy | Hallucination Rate | Cost (USD) | Cost/Correct |
+|----------|--------|----------|--------------------|------------|--------------|
 | Truncation | FIFO | 33.3% | 16.7% | $0.025 | $0.013 |
+| Abstractive | FIFO | **0.0%** | 0.0% | $0.228 | N/A |
+| Abstractive | Surprise | **0.0%** | 0.0% | $0.201 | N/A |
 | Truncation | Hybrid | 50.0% | 16.7% | $0.376 | $0.125 |
-| Abstractive | Hybrid | 50.0% | **0.0%** | **$0.025** | **$0.013** |
+| Abstractive | Hybrid | 50.0% | **0.0%** | $0.025 | $0.013 |
 | Hierarchical | Hybrid | **66.7%** | 16.7% | $0.267 | $0.067 |
 
 ### Three Findings
 
-**Finding 1 — Forgetting policy contributes as much as compression strategy.**
-Switching Truncation's forgetting policy from FIFO → Hybrid improved accuracy by +50% relatively (33.3% → 50.0%) with zero changes to compression. This is the most underappreciated dimension: most memory agent implementations focus entirely on compression algorithms and ignore eviction policy.
+**Finding 1 — Wrong forgetting policy causes catastrophic failure.**
+Abstractive+FIFO and Abstractive+Surprise both scored 0.0% accuracy — 
+complete failure on every probe question — while Abstractive+Hybrid scored 
+50.0% on identical inputs with identical compression. The only variable was 
+the eviction policy. FIFO discards the oldest episodes first, which in a 
+support ticket scenario are exactly the ones containing account numbers, 
+compliance constraints, and budget caps that probes ask about. Surprise 
+policy misclassifies short factual turns as "redundant" due to low vocabulary 
+diversity. Hybrid protects early high-value episodes by weighting importance 
+alongside recency. Forgetting policy is not a secondary concern — a wrong 
+choice produces results indistinguishable from complete memory failure.
 
 **Finding 2 — Abstractive compression is the efficiency Pareto winner.**
-Abstractive + Hybrid matches Truncation + Hybrid on accuracy (50% each) at 15× lower cost ($0.025 vs $0.376) with 0% hallucination rate. It strictly dominates on two of three metrics. For cost-sensitive production deployments, abstractive compression with a hybrid forgetting policy is the clear choice.
+Abstractive+Hybrid matches Truncation+Hybrid on accuracy (50% each) at 15× 
+lower cost ($0.025 vs $0.376) with 0% hallucination. It strictly dominates 
+on two of three metrics. For cost-sensitive deployments, abstractive 
+compression with hybrid forgetting is the clear choice.
 
-**Finding 3 — Hierarchical compression trades cost for accuracy, not safety.**
-Hierarchical achieves the best accuracy (66.7%, +33% over baseline) but at $0.267 — roughly 10× the cost of abstractive for a 16.7% accuracy gain. Critically, it still hallucinates at 16.7%. The accuracy gain comes from better fact retention across compression cycles, but the model still over-trusts preserved text fragments.
-
-**The hallucination finding:** Only abstractive compression achieves 0% hallucination. Truncation and hierarchical both preserve raw text fragments that the agent treats as ground truth. Abstractive summarisation forces explicit statement of known facts, making gaps visible — when information is missing from the summary, the agent is more likely to say so rather than confabulate.
+**Finding 3 — Hierarchical compression trades cost for accuracy.**
+Best accuracy (66.7%, +33% over baseline) at $0.267 — roughly 10× the cost 
+of abstractive for a 16.7% accuracy gain. The accuracy gain is real but the 
+cost premium is steep. Whether that tradeoff is acceptable depends entirely 
+on the use case.
 
 ---
 
