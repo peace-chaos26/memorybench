@@ -2,7 +2,6 @@
 
 > **Evaluation of Memory Compression & Forgetting Policies in LLM Agents**
 
-[![CI](https://github.com/peace-chaos26/memorybench/actions/workflows/ci.yml/badge.svg)](https://github.com/peace-chaos26/memorybench/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![OpenAI](https://img.shields.io/badge/LLM-GPT--4o-412991.svg)](https://openai.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
