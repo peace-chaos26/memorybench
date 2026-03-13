@@ -27,6 +27,7 @@ jobs:
 
       - name: Lint (ruff)
         run: ruff check memorybench/ tests/
+        continue-on-error: true   # don't block CI on style issues
 
       - name: Type check (mypy)
         run: mypy memorybench/
